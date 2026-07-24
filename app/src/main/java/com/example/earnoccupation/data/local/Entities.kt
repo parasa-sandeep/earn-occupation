@@ -20,6 +20,13 @@ data class UserProfile(
     val isLoggedIn: Boolean = true
 )
 
+@Entity(tableName = "user_accounts")
+data class UserAccount(
+    @PrimaryKey val email: String,
+    val username: String,
+    val passwordHash: String
+)
+
 @Entity(tableName = "job_items")
 data class JobItem(
     @PrimaryKey val id: String,

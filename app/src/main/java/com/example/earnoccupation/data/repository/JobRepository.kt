@@ -3,6 +3,7 @@ package com.example.earnoccupation.data.repository
 import com.example.earnoccupation.data.local.AppDao
 import com.example.earnoccupation.data.local.ChatMessage
 import com.example.earnoccupation.data.local.JobItem
+import com.example.earnoccupation.data.local.UserAccount
 import com.example.earnoccupation.data.local.UserProfile
 import com.example.earnoccupation.data.seed.InitialJobData
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +25,30 @@ class JobRepository(private val appDao: AppDao) {
         if (existingProfile == null) {
             appDao.saveUserProfile(UserProfile())
         }
+        if (appDao.getUserAccountCount() == 0) {
+            appDao.insertUserAccount(
+                UserAccount(
+                    email = "sandeep@earnoccupation.com",
+                    username = "Sandeep Parasa",
+                    passwordHash = "password123"
+                )
+            )
+            appDao.insertUserAccount(
+                UserAccount(
+                    email = "user@earnoccupation.com",
+                    username = "Demonstration User",
+                    passwordHash = "password123"
+                )
+            )
+        }
+    }
+
+    suspend fun getUserAccount(email: String): UserAccount? {
+        return appDao.getUserAccountDirect(email)
+    }
+
+    suspend fun registerUserAccount(email: String, username: String, passwordHash: String) {
+        appDao.insertUserAccount(UserAccount(email = email.trim(), username = username.trim(), passwordHash = passwordHash))
     }
 
     suspend fun saveProfile(profile: UserProfile) {

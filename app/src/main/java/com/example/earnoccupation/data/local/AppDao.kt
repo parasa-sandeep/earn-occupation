@@ -17,6 +17,16 @@ interface AppDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveUserProfile(profile: UserProfile)
 
+    // User Accounts
+    @Query("SELECT * FROM user_accounts WHERE LOWER(email) = LOWER(:email) LIMIT 1")
+    suspend fun getUserAccountDirect(email: String): UserAccount?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertUserAccount(account: UserAccount)
+
+    @Query("SELECT COUNT(*) FROM user_accounts")
+    suspend fun getUserAccountCount(): Int
+
     // Job Items
     @Query("SELECT * FROM job_items")
     fun getAllJobs(): Flow<List<JobItem>>

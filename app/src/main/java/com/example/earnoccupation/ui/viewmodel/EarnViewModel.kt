@@ -302,5 +302,79 @@ class EarnViewModel(application: Application) : AndroidViewModel(application) {
         _profileAuditResult.value = null
         _isAuditingProfile.value = false
     }
+
+    suspend fun authenticateLogin(emailInput: String, passwordInput: String): AuthResult {
+        val email = emailInput.trim()
+        val password = passwordInput.trim()
+        val emailRegex = Regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
+
+        if (email.isBlank() || !emailRegex.matches(email)) {
+            return AuthResult.Error("Please enter a valid email address (e.g., name@example.com)")
+        }
+        if (password.isBlank()) {
+            return AuthResult.Error("Please enter your password")
+        }
+        if (password.length < 6) {
+            return AuthResult.Error("Password must be at least 6 characters long")
+        }
+
+        val account = repository.getUserAccount(email)
+        if (account == null) {
+            // New email address entered with valid password: auto-register and sign in
+            val defaultUsername = email.substringBefore("@").split(".", "_", "-").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
+            repository.registerUserAccount(email, defaultUsername, password)
+            val current = userProfile.value ?: UserProfile()
+            repository.saveProfile(current.copy(username = defaultUsername, email = email))
+            return AuthResult.Success(username = defaultUsername, email = email)
+        }
+        if (account.passwordHash != password) {
+            return AuthResult.Error("Incorrect password for $email. Please enter the correct password.")
+        }
+
+        val current = userProfile.value ?: UserProfile()
+        repository.saveProfile(current.copy(username = account.username, email = account.email))
+        return AuthResult.Success(username = account.username, email = account.email)
+    }
+
+    suspend fun registerNewAccount(emailInput: String, usernameInput: String, passwordInput: String): AuthResult {
+        val email = emailInput.trim()
+        val username = usernameInput.trim()
+        val password = passwordInput.trim()
+        val emailRegex = Regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
+
+        if (email.isBlank() || !emailRegex.matches(email)) {
+            return AuthResult.Error("Please enter a valid email address (e.g., name@example.com)")
+        }
+        if (username.isBlank() || username.length < 2) {
+            return AuthResult.Error("Username must be at least 2 characters long")
+        }
+        if (password.isBlank()) {
+            return AuthResult.Error("Please enter a password")
+        }
+        if (password.length < 6) {
+            return AuthResult.Error("Password must be at least 6 characters long")
+        }
+
+        val existing = repository.getUserAccount(email)
+        if (existing != null) {
+            if (existing.passwordHash == password) {
+                val current = userProfile.value ?: UserProfile()
+                repository.saveProfile(current.copy(username = username.ifBlank { existing.username }, email = email))
+                return AuthResult.Success(username = username.ifBlank { existing.username }, email = email)
+            } else {
+                return AuthResult.Error("An account with email '$email' already exists. Incorrect password provided.")
+            }
+        }
+
+        repository.registerUserAccount(email = email, username = username, passwordHash = password)
+        val current = userProfile.value ?: UserProfile()
+        repository.saveProfile(current.copy(username = username, email = email))
+        return AuthResult.Success(username = username, email = email)
+    }
+}
+
+sealed class AuthResult {
+    data class Success(val username: String, val email: String) : AuthResult()
+    data class Error(val message: String) : AuthResult()
 }
 

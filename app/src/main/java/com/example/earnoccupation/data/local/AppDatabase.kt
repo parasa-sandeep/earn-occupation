@@ -6,8 +6,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [UserProfile::class, JobItem::class, ChatMessage::class],
-    version = 1,
+    entities = [UserProfile::class, JobItem::class, ChatMessage::class, UserAccount::class],
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

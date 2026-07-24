@@ -61,6 +61,7 @@ fun EarnOccupationApp(
 
         ScreenState.AUTH -> {
             AuthScreen(
+                viewModel = viewModel,
                 onAuthSuccess = { username, email ->
                     viewModel.navigateTo(ScreenState.USER_DETAILS)
                 }

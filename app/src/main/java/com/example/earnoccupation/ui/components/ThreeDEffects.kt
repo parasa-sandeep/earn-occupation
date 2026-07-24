@@ -64,74 +64,36 @@ fun Interactive3DTiltCard(
     glareOpacity: Float = 0.35f,
     content: @Composable BoxScope.() -> Unit
 ) {
-    val coroutineScope = rememberCoroutineScope()
     var componentSize by remember { mutableStateOf(IntSize.Zero) }
 
-    val rotationXAnim = remember { Animatable(0f) }
-    val rotationYAnim = remember { Animatable(0f) }
-    val pressScaleAnim = remember { Animatable(1f) }
-
-    // Dynamic light sheen center relative coordinates (0..1)
-    var lightSourceOffset by remember { mutableStateOf(Offset(0.5f, 0.5f)) }
+    val infiniteTransition = rememberInfiniteTransition(label = "3d_ambient_tilt")
+    val tiltX by infiniteTransition.animateFloat(
+        initialValue = -2.5f,
+        targetValue = 2.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "tiltX"
+    )
+    val tiltY by infiniteTransition.animateFloat(
+        initialValue = -3.5f,
+        targetValue = 3.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "tiltY"
+    )
 
     Box(
         modifier = modifier
             .onGloballyPositioned { coordinates ->
                 componentSize = coordinates.size
             }
-            .pointerInput(Unit) {
-                detectDragGestures(
-                    onDragStart = { offset ->
-                        coroutineScope.launch {
-                            pressScaleAnim.animateTo(1.03f, spring(stiffness = 500f))
-                        }
-                    },
-                    onDragEnd = {
-                        coroutineScope.launch {
-                            launch { rotationXAnim.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 400f)) }
-                            launch { rotationYAnim.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 400f)) }
-                            launch { pressScaleAnim.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 400f)) }
-                            lightSourceOffset = Offset(0.5f, 0.5f)
-                        }
-                    },
-                    onDragCancel = {
-                        coroutineScope.launch {
-                            launch { rotationXAnim.animateTo(0f, spring()) }
-                            launch { rotationYAnim.animateTo(0f, spring()) }
-                            launch { pressScaleAnim.animateTo(1f, spring()) }
-                            lightSourceOffset = Offset(0.5f, 0.5f)
-                        }
-                    },
-                    onDrag = { change, _ ->
-                        change.consume()
-                        if (componentSize.width > 0 && componentSize.height > 0) {
-                            val touchX = change.position.x
-                            val touchY = change.position.y
-
-                            val normX = (touchX / componentSize.width - 0.5f).coerceIn(-0.5f, 0.5f)
-                            val normY = (touchY / componentSize.height - 0.5f).coerceIn(-0.5f, 0.5f)
-
-                            val targetRotY = normX * maxTiltDegrees * 2f
-                            val targetRotX = -normY * maxTiltDegrees * 2f
-
-                            lightSourceOffset = Offset(
-                                (0.5f + normX * 1.2f).coerceIn(0f, 1f),
-                                (0.5f + normY * 1.2f).coerceIn(0f, 1f)
-                            )
-
-                            coroutineScope.launch {
-                                launch { rotationXAnim.snapTo(targetRotX) }
-                                launch { rotationYAnim.snapTo(targetRotY) }
-                            }
-                        }
-                    }
-                )
-            }
             .graphicsLayer {
-                rotationX = rotationXAnim.value
-                rotationY = rotationYAnim.value
-                scaleX = pressScaleAnim.value
-                scaleY = pressScaleAnim.value
+                rotationX = tiltX
+                rotationY = tiltY
                 cameraDistance = 18f * density
             }
             .clip(shape)
@@ -146,13 +108,13 @@ fun Interactive3DTiltCard(
                     .background(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Color.White.copy(alpha = glareOpacity),
-                                Color.White.copy(alpha = glareOpacity * 0.3f),
+                                Color.White.copy(alpha = glareOpacity * 0.35f),
+                                Color.White.copy(alpha = glareOpacity * 0.1f),
                                 Color.Transparent
                             ),
                             center = Offset(
-                                x = lightSourceOffset.x * (componentSize.width.takeIf { it > 0 } ?: 300).toFloat(),
-                                y = lightSourceOffset.y * (componentSize.height.takeIf { it > 0 } ?: 300).toFloat()
+                                x = (componentSize.width.takeIf { it > 0 } ?: 300) * 0.5f,
+                                y = (componentSize.height.takeIf { it > 0 } ?: 300) * 0.25f
                             ),
                             radius = (componentSize.width.coerceAtLeast(1) * 0.9f)
                         )
@@ -163,17 +125,13 @@ fun Interactive3DTiltCard(
 }
 
 /**
- * An interactive 3D Floating Career Wireframe Cube that rotates continuously in isometric 3D space
- * and spins faster when swiped by the user!
+ * An interactive 3D Floating Career Wireframe Cube that rotates continuously in isometric 3D space!
  */
 @Composable
 fun Interactive3DCareerCube(
     modifier: Modifier = Modifier,
     cubeSize: Dp = 120.dp
 ) {
-    var manualSpinAngleX by remember { mutableFloatStateOf(0f) }
-    var manualSpinAngleY by remember { mutableFloatStateOf(0f) }
-
     val infiniteTransition = rememberInfiniteTransition(label = "cube3d")
     val autoRotate by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -186,19 +144,12 @@ fun Interactive3DCareerCube(
     )
 
     Box(
-        modifier = modifier
-            .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    manualSpinAngleY += dragAmount.x * 0.5f
-                    manualSpinAngleX -= dragAmount.y * 0.5f
-                }
-            },
+        modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val totalRotY = (autoRotate + manualSpinAngleY) * (Math.PI / 180.0)
-            val totalRotX = (30f + manualSpinAngleX) * (Math.PI / 180.0)
+            val totalRotY = autoRotate * (Math.PI / 180.0)
+            val totalRotX = 30f * (Math.PI / 180.0)
 
             val sizePx = cubeSize.toPx() / 2f
             val cx = size.width / 2f
