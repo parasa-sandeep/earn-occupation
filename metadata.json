@@ -1,0 +1,6 @@
+{
+  "name": "Earn Occupation",
+  "description": "Find jobs, internships, and company opportunities tailored to your education, branch, skills, and salary expectations across India and globally.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
