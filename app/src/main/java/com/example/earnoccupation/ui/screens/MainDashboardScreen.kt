@@ -25,9 +25,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CurrencyRupee
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
@@ -37,12 +39,14 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Work
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -66,13 +70,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
 import com.example.earnoccupation.data.local.JobItem
 import com.example.earnoccupation.ui.components.Interactive3DTiltCard
 import com.example.earnoccupation.data.local.UserProfile
@@ -104,7 +111,16 @@ fun MainDashboardScreen(
     val selectedBranch by viewModel.selectedBranchFilter.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
 
+    val isGeneratingCoverLetter by viewModel.isGeneratingCoverLetter.collectAsState()
+    val coverLetterResult by viewModel.coverLetterResult.collectAsState()
+    val coverLetterJob by viewModel.coverLetterJob.collectAsState()
+
+    val isAuditingProfile by viewModel.isAuditingProfile.collectAsState()
+    val profileAuditResult by viewModel.profileAuditResult.collectAsState()
+
     var activeChatJob by remember { mutableStateOf<JobItem?>(null) }
+    val clipboardManager = LocalClipboardManager.current
+
 
     val branchesList = listOf("ALL", "CSE", "ECE", "MECHANICAL", "CIVIL", "MEDICAL", "ELECTRICAL")
 
@@ -337,6 +353,9 @@ fun MainDashboardScreen(
                                         },
                                         onMessageClick = {
                                             activeChatJob = matchedItem.job
+                                        },
+                                        onCoverLetterClick = {
+                                            viewModel.generateCoverLetterForJob(matchedItem.job)
                                         }
                                     )
                                 }
@@ -380,6 +399,9 @@ fun MainDashboardScreen(
                                         },
                                         onMessageClick = {
                                             activeChatJob = savedJob
+                                        },
+                                        onCoverLetterClick = {
+                                            viewModel.generateCoverLetterForJob(savedJob)
                                         }
                                     )
                                 }
@@ -468,10 +490,156 @@ fun MainDashboardScreen(
                         // Profile & Skill Roadmap
                         ProfileTab(
                             profile = userProfile ?: UserProfile(),
-                            onEditProfileClick = onEditProfileClick
+                            onEditProfileClick = onEditProfileClick,
+                            onAuditProfileClick = { viewModel.performProfileAudit() }
                         )
                     }
                 }
+            }
+
+            // AI Cover Letter Dialog
+            if (isGeneratingCoverLetter || coverLetterResult != null) {
+                AlertDialog(
+                    onDismissRequest = { viewModel.clearCoverLetterDialog() },
+                    containerColor = Color(0xFF0F172A),
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = CyanAccent)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Gemini AI Application Pitch",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    },
+                    text = {
+                        if (isGeneratingCoverLetter) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                CircularProgressIndicator(color = CyanAccent)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text("Writing tailored application pitch for ${coverLetterJob?.company ?: "company"}...", color = Indigo200, fontSize = 14.sp)
+                            }
+                        } else {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    text = "Tailored for ${coverLetterJob?.title} at ${coverLetterJob?.company}:",
+                                    fontSize = 12.sp,
+                                    color = CyanAccent,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = GlassCardBg),
+                                    modifier = Modifier.border(1.dp, GlassCardBorder, RoundedCornerShape(12.dp))
+                                ) {
+                                    Text(
+                                        text = coverLetterResult ?: "",
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        lineHeight = 18.sp,
+                                        modifier = Modifier.padding(12.dp)
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        if (!isGeneratingCoverLetter && coverLetterResult != null) {
+                            Button(
+                                onClick = {
+                                    clipboardManager.setText(AnnotatedString(coverLetterResult ?: ""))
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = CyanAccent, contentColor = Color(0xFF0F172A))
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Copy Pitch", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { viewModel.clearCoverLetterDialog() }) {
+                            Text("Close", color = Indigo200)
+                        }
+                    }
+                )
+            }
+
+            // AI Resume & Career Audit Dialog
+            if (isAuditingProfile || profileAuditResult != null) {
+                AlertDialog(
+                    onDismissRequest = { viewModel.clearProfileAuditDialog() },
+                    containerColor = Color(0xFF0F172A),
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Psychology, contentDescription = null, tint = EmeraldGreen)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Gemini AI Profile Audit",
+                                color = Color.White,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    },
+                    text = {
+                        if (isAuditingProfile) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                CircularProgressIndicator(color = EmeraldGreen)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text("Analyzing skills, LPA target & branch metrics...", color = Indigo200, fontSize = 14.sp)
+                            }
+                        } else {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = GlassCardBg),
+                                modifier = Modifier.border(1.dp, GlassCardBorderGlow, RoundedCornerShape(12.dp))
+                            ) {
+                                Text(
+                                    text = profileAuditResult ?: "",
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    lineHeight = 18.sp,
+                                    modifier = Modifier.padding(14.dp)
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        if (!isAuditingProfile && profileAuditResult != null) {
+                            Button(
+                                onClick = {
+                                    clipboardManager.setText(AnnotatedString(profileAuditResult ?: ""))
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen, contentColor = Color.White)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Copy Audit", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { viewModel.clearProfileAuditDialog() }) {
+                            Text("Close", color = Indigo200)
+                        }
+                    }
+                )
             }
         }
     }
@@ -482,7 +650,8 @@ private fun JobCard(
     matchedJob: MatchedJob,
     onSaveToggle: () -> Unit,
     onApplyClick: () -> Unit,
-    onMessageClick: () -> Unit
+    onMessageClick: () -> Unit,
+    onCoverLetterClick: () -> Unit
 ) {
     val job = matchedJob.job
 
@@ -598,18 +767,31 @@ private fun JobCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Button(
                     onClick = onApplyClick,
                     colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF0F172A)),
                     shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1.2f)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Apply (${job.platform})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Text("Apply", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(13.dp))
+                    }
+                }
+
+                Button(
+                    onClick = onCoverLetterClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0x3300E5FF), contentColor = CyanAccent),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.border(1.dp, CyanAccent.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(13.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("AI Pitch", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -620,9 +802,9 @@ private fun JobCard(
                     modifier = Modifier.border(1.dp, EmeraldGreen, RoundedCornerShape(14.dp))
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Message", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, modifier = Modifier.size(13.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("Chat", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -766,7 +948,8 @@ private fun RecruiterChatView(
 @Composable
 private fun ProfileTab(
     profile: UserProfile,
-    onEditProfileClick: () -> Unit
+    onEditProfileClick: () -> Unit,
+    onAuditProfileClick: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -811,6 +994,26 @@ private fun ProfileTab(
                         ProfileItemRow("Skills", profile.skills)
                         ProfileItemRow("Location Target", "${profile.preferredCity}, ${profile.preferredState}")
                         ProfileItemRow("Expected Salary", "≥ ₹${profile.minSalaryLpa} LPA")
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Button(
+                            onClick = onAuditProfileClick,
+                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen, contentColor = Color.White),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("ai_profile_audit_btn")
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Gemini AI Resume & Skill Audit", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }

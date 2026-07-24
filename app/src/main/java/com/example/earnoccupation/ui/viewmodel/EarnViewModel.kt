@@ -3,6 +3,7 @@ package com.example.earnoccupation.ui.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.earnoccupation.data.api.GeminiService
 import com.example.earnoccupation.data.local.AppDatabase
 import com.example.earnoccupation.data.local.ChatMessage
 import com.example.earnoccupation.data.local.JobItem
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -52,6 +54,23 @@ class EarnViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _analyzingStatusText = MutableStateFlow("Extracting skill vectors...")
     val analyzingStatusText: StateFlow<String> = _analyzingStatusText.asStateFlow()
+
+    // Cover Letter state
+    private val _isGeneratingCoverLetter = MutableStateFlow(false)
+    val isGeneratingCoverLetter: StateFlow<Boolean> = _isGeneratingCoverLetter.asStateFlow()
+
+    private val _coverLetterResult = MutableStateFlow<String?>(null)
+    val coverLetterResult: StateFlow<String?> = _coverLetterResult.asStateFlow()
+
+    private val _coverLetterJob = MutableStateFlow<JobItem?>(null)
+    val coverLetterJob: StateFlow<JobItem?> = _coverLetterJob.asStateFlow()
+
+    // Profile Audit state
+    private val _isAuditingProfile = MutableStateFlow(false)
+    val isAuditingProfile: StateFlow<Boolean> = _isAuditingProfile.asStateFlow()
+
+    private val _profileAuditResult = MutableStateFlow<String?>(null)
+    val profileAuditResult: StateFlow<String?> = _profileAuditResult.asStateFlow()
 
     init {
         val database = AppDatabase.getDatabase(application)
@@ -219,6 +238,7 @@ class EarnViewModel(application: Application) : AndroidViewModel(application) {
 
     fun sendUserMessageToCompany(job: JobItem, messageText: String, userName: String) {
         viewModelScope.launch {
+            // Save user message to Room DB
             repository.sendChatMessage(
                 jobId = job.id,
                 companyName = job.company,
@@ -226,16 +246,61 @@ class EarnViewModel(application: Application) : AndroidViewModel(application) {
                 isFromUser = true,
                 senderName = userName
             )
-            // Auto-reply recruiter response simulation
-            delay(1200)
-            val recruiterReply = "Hello $userName! Thank you for reaching out directly for the ${job.title} position at ${job.company}. Our recruitment team has reviewed your profile (${job.branch} branch). We will notify you regarding the next interview round!"
+
+            val currentProfile = userProfile.value ?: UserProfile(username = userName)
+            val currentChatList = repository.getChatForJob(job.id).firstOrNull() ?: emptyList()
+            val chatHistoryPairs = currentChatList.map { Pair(it.senderName, it.messageText) }
+
+            // Get real Gemini AI response as Recruiter
+            val aiReply = GeminiService.getAIRecruiterResponse(
+                userMessage = messageText,
+                user = currentProfile,
+                job = job,
+                chatHistory = chatHistoryPairs
+            )
+
             repository.sendChatMessage(
                 jobId = job.id,
                 companyName = job.company,
-                text = recruiterReply,
+                text = aiReply,
                 isFromUser = false,
                 senderName = job.recruiterName
             )
         }
     }
+
+    fun generateCoverLetterForJob(job: JobItem) {
+        _coverLetterJob.value = job
+        _isGeneratingCoverLetter.value = true
+        _coverLetterResult.value = null
+        viewModelScope.launch {
+            val profile = userProfile.value ?: UserProfile()
+            val result = GeminiService.generateCoverLetter(profile, job)
+            _coverLetterResult.value = result.getOrDefault("")
+            _isGeneratingCoverLetter.value = false
+        }
+    }
+
+    fun clearCoverLetterDialog() {
+        _coverLetterResult.value = null
+        _coverLetterJob.value = null
+        _isGeneratingCoverLetter.value = false
+    }
+
+    fun performProfileAudit() {
+        _isAuditingProfile.value = true
+        _profileAuditResult.value = null
+        viewModelScope.launch {
+            val profile = userProfile.value ?: UserProfile()
+            val result = GeminiService.analyzeResumeAndSkills(profile)
+            _profileAuditResult.value = result.getOrDefault("")
+            _isAuditingProfile.value = false
+        }
+    }
+
+    fun clearProfileAuditDialog() {
+        _profileAuditResult.value = null
+        _isAuditingProfile.value = false
+    }
 }
+
